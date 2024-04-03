@@ -1,0 +1,310 @@
+Sub UWsub_Raw_to_GNextracted()
+'
+' Raw_to_GNextracted_edited Macro
+' Removed unnecessary lines from Excel macro to streamline data processing
+'
+' Extraction_sorted_control_filtered_GNextracted Macro
+'
+    ' Delete rows 1 to 9
+    Rows("1:9").Delete Shift:=xlUp
+    
+    ' Delete unnecessary columns
+    Columns("T:AQ").EntireColumn.Delete
+    Columns("H:Q").EntireColumn.Delete
+    Columns("E:E").EntireColumn.Delete
+    Columns("A:A").EntireColumn.Delete
+    
+    ' Add "Group_num" header in column L
+    Range("H1").Value = "Group_num"
+    
+    ' Set the active cell to A2 to freeze everything above and to left
+    Range("A2").Select
+    
+    ' Freeze the top row
+    ActiveWindow.FreezePanes = True
+    
+    ' Clear existing sorting fields
+    ActiveWorkbook.ActiveSheet.Sort.SortFields.Clear
+    
+    ' Sort data based on column E
+    With ActiveWorkbook.ActiveSheet.Sort
+        .SetRange Range("A1:G" & Cells(Rows.Count, "E").End(xlUp).Row)
+        .SortFields.Add2 Key:=Range("E2:E" & Cells(Rows.Count, "E").End(xlUp).Row), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+        .Header = xlYes
+        .MatchCase = False
+        .Orientation = xlTopToBottom
+        .SortMethod = xlPinYin
+        .Apply
+    End With
+    
+    ' Add AutoFilter on column D to filter out "0"
+    ActiveSheet.Range("$A$1:$G$" & Cells(Rows.Count, "E").End(xlUp).Row).AutoFilter Field:=4, Criteria1:="0"
+    
+    ' Extract group numbers in column L
+    Range("H3010").FormulaR1C1 = "=LEFT(RC[-3], FIND(""_"",RC[-3])-1)"
+    Range("H3010").AutoFill Destination:=Range("H3010:H" & Cells(Rows.Count, "E").End(xlUp).Row)
+    
+    ' Copy formulas from L3012 to the last row in column L and paste as values
+    Range("H3012:H" & Cells(Rows.Count, "H").End(xlUp).Row).Copy
+    Range("H3012").PasteSpecial Paste:=xlPasteValues
+    
+    ' Scroll to the top
+    ActiveWindow.ScrollRow = 1
+End Sub
+
+
+
+
+Sub UWsub_ProcessedGN_to_SummaryStats()
+'
+' ProcessedGN_to_SummaryStats Macro
+' Takes GN extracted (column L) and creates R and G summary stats for graphing
+'
+    Dim lastRow As Long
+    Dim ws As Worksheet
+    
+    ' Find the last row in column L
+    lastRow = Cells(Rows.Count, "A").End(xlUp).Row
+    
+    ' Add headers for summary statistics
+    Set ws = ActiveSheet
+    ws.Range("J1").Value = "Group Number"
+    ws.Range("K1").Value = "R_Average"
+    ws.Range("L1").Value = "G_Average"
+    ws.Range("M1").Value = "R_STD/2"
+    ws.Range("N1").Value = "G_STD/2"
+    
+    ' Populate Group Number column
+    Dim i As Long
+    For i = 3010 To 3632
+        ws.Cells(i, "J").Value = i - 3010 + 1
+    Next i
+
+    ' Add formulas for summary statistics
+    ws.Range("K3010:K3632").Formula = "=AVERAGEIF($H$3010:$H$" & lastRow & ", $J3010, $G$3010:$G$" & lastRow & ")"
+    ws.Range("L3010:L3632").Formula = "=AVERAGEIF($H$3010:$H$" & lastRow & ", $J3010, $F$3010:$F$" & lastRow & ")"
+    ws.Range("M3010:M3012").Formula = "=STDEV.S(IF(H$3010:H$" & lastRow & "=$J3010, G$3010:G$" & lastRow & ")) / 2"
+    ws.Range("N3010:N3012").Formula = "=STDEV.S(IF(H$3010:H$" & lastRow & "=$J3010, F$3010:F$" & lastRow & ")) / 2"
+
+    'ws.Range("M3010:M3632").Formula = "=STDEV.S(IF($H$3010:$H$" & lastRow & "=$J3010, $G$3010:$G$" & lastRow & ", """"))/2"
+    'ws.Range("N3010:N3632").Formula = "=STDEV.S(IF($H$3010:$H$" & lastRow & "=$J3010, $F$3010:$F$" & lastRow & ", """"))/2"
+    
+    ' Convert formulas to values
+    ws.Range("K3014:N3632").Value = ws.Range("K3014:N3632").Value
+End Sub
+
+
+
+Sub UWsub_CreateAndFormat6Graphs_red()
+'
+' CreateAndFormatGraphs Macro
+' Creates six graphs and formats them with correct axes, labels, and formatting
+' ADD STANDARD DEVIATIONS!
+'
+
+    ' Copy data from column J:N and paste as values to a new sheet
+    Columns("J:N").Copy
+    Sheets.Add After:=ActiveSheet
+    ActiveSheet.Paste
+    Application.CutCopyMode = False
+    
+    ' Rename the new sheet
+    Dim newSheet As Worksheet
+    Set newSheet = ActiveSheet
+    newSheet.Name = "GN_summary_red"
+    Dim lastRow As Long
+    lastRow = newSheet.Cells(newSheet.Rows.Count, "A").End(xlUp).Row
+    ' Find the maximum value in the data range
+    Dim maxVal As Double
+    Dim maxVa As Double
+    maxVa = Application.WorksheetFunction.Max(newSheet.Range("B1:B624"))
+    maxVal = Round(maxVa, 0)
+    minVal = 0
+    
+    ' Declare variables for chart ranges
+    Dim chartRange1 As Range, chartRange2 As Range, chartRange3 As Range, chartRange4 As Range, chartRange5 As Range, chartRange6 As Range
+    
+    ' Set the chart ranges
+    Set chartRange1 = newSheet.Range("B2:B101")
+    Set chartRange2 = newSheet.Range("B102:B201")
+    Set chartRange3 = newSheet.Range("B202:B301")
+    Set chartRange4 = newSheet.Range("B402:B501")
+    Set chartRange5 = newSheet.Range("B502:B601")
+    Set chartRange6 = newSheet.Range("B602:B624")
+    
+    ' Create and format the first chart
+    With newSheet.Shapes.AddChart2(201, xlColumnClustered).Chart
+        .SetSourceData Source:=chartRange1
+        .ChartTitle.Text = "Average Intensity Groups 1-100"
+        ' Set HasTitle property for the category axis
+        .Axes(xlCategory).HasTitle = True
+        ' Set category axis title
+        .Axes(xlCategory).AxisTitle.Text = "Group Numbers"
+        ' Modify series fill color
+        .FullSeriesCollection(1).Format.Fill.ForeColor.RGB = RGB(192, 0, 0)
+        ' Set y-axis scale
+        .Axes(xlValue).MaximumScale = maxVal
+        .Axes(xlValue).MinimumScale = minVal
+        ' Set y-axis label
+        .Axes(xlValue).HasTitle = True
+        .Axes(xlValue).AxisTitle.Text = "Intensity"
+        ' Format legend
+        With .Legend
+            .Position = xlLegendPositionTop
+            .Position = xlLegendPositionTop
+            .Left = 280
+            .Top = 10
+            .Font.Size = 10
+        End With
+
+    End With
+
+
+    ' Create and format the second chart
+    With newSheet.Shapes.AddChart2(201, xlColumnClustered).Chart
+        .SetSourceData Source:=chartRange2
+        .ChartTitle.Text = "Average Intensity Groups 101-200"
+        ' Set HasTitle property for the category axis
+        .Axes(xlCategory).HasTitle = True
+        ' Set category axis title
+        .Axes(xlCategory).AxisTitle.Text = "Group Numbers"
+        ' Modify series fill color
+        .FullSeriesCollection(1).Format.Fill.ForeColor.RGB = RGB(192, 0, 0)
+        ' Set category labels
+        .FullSeriesCollection(1).XValues = "=GN_summary_red!$A$102:$A$201"
+        ' Set series name (legend)
+        .FullSeriesCollection(1).Name = "=GN_summary_red!$B$1"
+        ' Set y-axis scale
+        .Axes(xlValue).MaximumScale = maxVal
+        .Axes(xlValue).MinimumScale = minVal
+        ' Set y-axis label
+        .Axes(xlValue).HasTitle = True
+        .Axes(xlValue).AxisTitle.Text = "Intensity"
+        ' Format legend
+        With .Legend
+            .Position = xlLegendPositionTop
+            .Position = xlLegendPositionTop
+            .Left = 280
+            .Top = 10
+            .Font.Size = 10
+        End With
+    End With
+    
+    ' Create and format the third chart
+    With newSheet.Shapes.AddChart2(201, xlColumnClustered).Chart
+        .SetSourceData Source:=chartRange3
+        .ChartTitle.Text = "Average Intensity Groups 201-300"
+        ' Set HasTitle property for the category axis
+        .Axes(xlCategory).HasTitle = True
+        .Axes(xlCategory).AxisTitle.Text = "Group Numbers"
+        ' Modify series fill color
+        .FullSeriesCollection(1).Format.Fill.ForeColor.RGB = RGB(192, 0, 0)
+        ' Set category labels
+        .FullSeriesCollection(1).XValues = "=GN_summary_red!$A$202:$A$301"
+        ' Set series name (legend)
+        .FullSeriesCollection(1).Name = "=GN_summary_red!$B$1"
+        ' Set y-axis scale
+        .Axes(xlValue).MaximumScale = maxVal
+        .Axes(xlValue).MinimumScale = minVal
+        ' Set y-axis label
+        .Axes(xlValue).HasTitle = True
+        .Axes(xlValue).AxisTitle.Text = "Intensity"
+        ' Format legend
+        With .Legend
+            .Position = xlLegendPositionTop
+            .Position = xlLegendPositionTop
+            .Left = 280
+            .Top = 10
+            .Font.Size = 10
+        End With
+    End With
+
+    ' Create and format the fourth chart
+    With newSheet.Shapes.AddChart2(201, xlColumnClustered).Chart
+        .SetSourceData Source:=chartRange4
+        .ChartTitle.Text = "Average Intensity Groups 301-400"
+        ' Set HasTitle property for the category axis
+        .Axes(xlCategory).HasTitle = True
+        ' Set category axis title
+        .Axes(xlCategory).AxisTitle.Text = "Group Numbers"
+        ' Modify series fill color
+        .FullSeriesCollection(1).Format.Fill.ForeColor.RGB = RGB(192, 0, 0)
+        ' Set category labels
+        .FullSeriesCollection(1).XValues = "=GN_summary_red!$A$302:$A$401"
+        ' Set series name (legend)
+        .FullSeriesCollection(1).Name = "=GN_summary_red!$B$1"
+        ' Set y-axis scale
+        .Axes(xlValue).MaximumScale = maxVal
+        .Axes(xlValue).MinimumScale = minVal
+        ' Set y-axis label
+        .Axes(xlValue).HasTitle = True
+        .Axes(xlValue).AxisTitle.Text = "Intensity"
+        ' Format legend
+        With .Legend
+            .Position = xlLegendPositionTop
+            .Position = xlLegendPositionTop
+            .Left = 280
+            .Top = 10
+            .Font.Size = 10
+        End With
+    End With
+
+    ' Create and format the 5th chart
+    With newSheet.Shapes.AddChart2(201, xlColumnClustered).Chart
+        .SetSourceData Source:=chartRange4
+        .ChartTitle.Text = "Average Intensity Groups 401-500"
+        ' Set HasTitle property for the category axis
+        .Axes(xlCategory).HasTitle = True
+        ' Set category axis title
+        .Axes(xlCategory).AxisTitle.Text = "Group Numbers"
+        ' Modify series fill color
+        .FullSeriesCollection(1).Format.Fill.ForeColor.RGB = RGB(192, 0, 0)
+        ' Set category labels
+        .FullSeriesCollection(1).XValues = "=GN_summary_red!$A$402:$A$501"
+        ' Set series name (legend)
+        .FullSeriesCollection(1).Name = "=GN_summary_red!$B$1"
+        ' Set y-axis scale
+        .Axes(xlValue).MaximumScale = maxVal
+        .Axes(xlValue).MinimumScale = minVal
+        ' Set y-axis label
+        .Axes(xlValue).HasTitle = True
+        .Axes(xlValue).AxisTitle.Text = "Intensity"
+        ' Format legend
+        With .Legend
+            .Position = xlLegendPositionTop
+            .Position = xlLegendPositionTop
+            .Left = 280
+            .Top = 10
+            .Font.Size = 10
+        End With
+    End With
+
+    ' Create and format the 6th chart
+    With newSheet.Shapes.AddChart2(201, xlColumnClustered).Chart
+        .SetSourceData Source:=chartRange4
+        .ChartTitle.Text = "Average Intensity Groups 501-623"
+        ' Set HasTitle property for the category axis
+        .Axes(xlCategory).HasTitle = True
+        ' Set category axis title
+        .Axes(xlCategory).AxisTitle.Text = "Group Numbers"
+        ' Modify series fill color
+        .FullSeriesCollection(1).Format.Fill.ForeColor.RGB = RGB(192, 0, 0)
+        ' Set category labels
+        .FullSeriesCollection(1).XValues = "=GN_summary_red!$A$502:$A$624"
+        ' Set series name (legend)
+        .FullSeriesCollection(1).Name = "=GN_summary_red!$B$1"
+        ' Set y-axis scale
+        .Axes(xlValue).MaximumScale = maxVal
+        .Axes(xlValue).MinimumScale = minVal
+        ' Set y-axis label
+        .Axes(xlValue).HasTitle = True
+        .Axes(xlValue).AxisTitle.Text = "Intensity"
+        ' Format legend
+        With .Legend
+            .Position = xlLegendPositionTop
+            .Left = 280
+            .Top = 10
+            .Font.Size = 10
+        End With
+    End With
+End Sub
